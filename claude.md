@@ -191,6 +191,16 @@ Stop and report after milestone 3 and after milestone 6.
   connected dry regions, with pressure from an ideal-gas law, gating entry
   into those cells. Not before the MVP works.
 - Canvas 2D, not WebGL: adequate at the MVP grid size and easier to debug.
+- `minFlow` default 0.01 -> 0 (milestone 3). Flows above `minFlow` are
+  halved; flows below it are applied in full, and a full vertical correction
+  applied at both faces of a cell overshoots, so deep water rings in a
+  period-2 oscillation of size up to `minFlow`. At 0.01 the sealed-exit maze
+  never settles below 1e-5 (still 4e-4 after 400k steps); at 0 it settles
+  (seed 42, ~270k steps). Cost: seed 42 drains at 13846 steps instead of 12400.
+- Cells below `minMass` hold their mass but do not flow. Otherwise
+  vanishingly small amounts (1e-30 and less) spread down every open path and
+  reach the exit long before any visible water, making `drained > 0` meaningless.
+  Mass is still conserved.
 
 ## Open
 
