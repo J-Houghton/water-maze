@@ -1,13 +1,29 @@
-import { drawCheckerboard } from '../render/draw';
+import { generateMaze } from '../maze/generate';
+import { createRenderer } from '../render/draw';
 import { createPanel } from './panel';
 
-const canvas = document.getElementById('view') as HTMLCanvasElement;
-const ctx = canvas.getContext('2d')!;
+const DEFAULT_SEED = 42;
+const DEFAULT_SIZE = 20;
 
-canvas.width = 80;
-canvas.height = 80;
-const img = ctx.createImageData(canvas.width, canvas.height);
-drawCheckerboard(img, 8);
-ctx.putImageData(img, 0, 0);
+/** Read an integer URL param, falling back when missing or invalid. */
+function intParam(params: URLSearchParams, name: string, fallback: number): number {
+  const v = Number.parseInt(params.get(name) ?? '', 10);
+  return Number.isFinite(v) ? v : fallback;
+}
+
+const params = new URLSearchParams(location.search);
+const seed = intParam(params, 'seed', DEFAULT_SEED);
+const cols = Math.max(1, intParam(params, 'w', DEFAULT_SIZE));
+const rows = Math.max(1, intParam(params, 'h', DEFAULT_SIZE));
+
+// Write the effective values back so the URL always reproduces what's on screen.
+params.set('seed', String(seed));
+params.set('w', String(cols));
+params.set('h', String(rows));
+history.replaceState(null, '', `${location.pathname}?${params}`);
+
+const maze = generateMaze(seed, { cols, rows });
+const canvas = document.getElementById('view') as HTMLCanvasElement;
+createRenderer(canvas, maze).draw();
 
 createPanel();

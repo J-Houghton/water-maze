@@ -1,14 +1,31 @@
-/** Fill an RGBA ImageData buffer with a checkerboard of `size`-pixel squares. */
-export function drawCheckerboard(img: ImageData, size: number): void {
-  const { width: w, height: h, data } = img;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const v = ((((x / size) | 0) + ((y / size) | 0)) & 1) === 0 ? 0x30 : 0xa0;
-      const o = (y * w + x) * 4;
-      data[o] = v;
-      data[o + 1] = v;
-      data[o + 2] = v;
-      data[o + 3] = 255;
-    }
-  }
+import type { Maze } from '../maze/types';
+
+/** Pack an opaque colour for a little-endian Uint32 view of RGBA bytes. */
+const rgb = (r: number, g: number, b: number) => (0xff << 24) | (b << 16) | (g << 8) | r;
+
+const WALL = rgb(0x8a, 0x8f, 0x99);
+const DRY = rgb(0x1b, 0x1d, 0x22);
+
+export interface Renderer {
+  draw(): void;
+}
+
+/**
+ * One ImageData at sim-grid resolution, written through a Uint32 view and
+ * blitted with a single putImageData. The canvas is scaled up by CSS.
+ */
+export function createRenderer(canvas: HTMLCanvasElement, maze: Maze): Renderer {
+  canvas.width = maze.w;
+  canvas.height = maze.h;
+  const ctx = canvas.getContext('2d')!;
+  const img = ctx.createImageData(maze.w, maze.h);
+  const px = new Uint32Array(img.data.buffer);
+  const { solid } = maze;
+
+  return {
+    draw() {
+      for (let i = 0; i < solid.length; i++) px[i] = solid[i] ? WALL : DRY;
+      ctx.putImageData(img, 0, 0);
+    },
+  };
 }
