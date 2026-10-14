@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { generateMaze } from '../src/maze/generate';
 import { createDroplets, updateDroplets, type Droplets } from '../src/render/droplets';
 import { createField, DEPTH_CAP, ISO, prepareField, Thin } from '../src/render/field';
-import { createSim, stepSim } from '../src/sim/water';
 
 /** Grid from rows of text: '#' wall, '.' dry, '~' full, a digit d holds d / 10. */
 function build(rows: string[], exitFlow = 0) {
@@ -88,6 +86,23 @@ describe('render field', () => {
     expect(field.thin[at(3, 2)]).toBe(Thin.None);
   });
 
+  // Regression: kind was decided on the float64 fill but fill is stored as
+  // float32, so a cell just under ISO could read as exactly ISO beside water
+  // at ISO, and the surface distance divided 0 by 0.
+  it('keeps depth finite when neighbouring fills straddle ISO by less than float32 precision', () => {
+    const w = 6;
+    const h = 5;
+    const solid = new Uint8Array(w * h);
+    for (let x = 0; x < w; x++) solid[x] = solid[(h - 1) * w + x] = 1;
+    for (let y = 0; y < h; y++) solid[y * w] = solid[y * w + w - 1] = 1;
+    const mass = new Float64Array(w * h);
+    mass[2 * w + 2] = ISO;
+    mass[2 * w + 3] = ISO - 1e-8;
+    const field = createField(w, h, solid);
+    prepareField(field, mass, 1, 0.0001, 0);
+    for (let i = 0; i < w * h; i++) expect(Number.isFinite(field.depth[i]), `cell ${i}`).toBe(true);
+  });
+
   it('draws the exit row full of the water passing through it only while it drains', () => {
     const rows = ['#####', '#.~.#', '#.~.#', '##.##'];
     const still = build(rows, 0);
@@ -98,24 +113,32 @@ describe('render field', () => {
 });
 
 describe('droplets', () => {
-  /** A real mid-pour state, which has falling streams with impact points. */
+  /**
+   * A fixed scene with every emitter: an entrance gap in the top row, a thin
+   * stream landing on a floor, and an exit gap in the bottom row. Built from
+   * text so it does not depend on what the sim happens to do at some step.
+   */
   function scene() {
-    const maze = generateMaze(42, { cols: 10, rows: 10 });
-    const sim = createSim(maze, { pourRate: 0.5 });
-    sim.pouring = true;
-    stepSim(sim, 1500);
-    const field = createField(maze.w, maze.h, maze.solid);
-    prepareField(field, sim.mass, 1, 0.0001, 0);
-    return { maze, field };
+    const { field } = build([
+      '####.#####',
+      '#...2....#',
+      '#...2....#',
+      '#...2....#',
+      '#...3....#',
+      '#...1.~1.#',
+      '######.###',
+    ]);
+    const { w, h, solid } = field;
+    return { field, w, h, solid };
   }
 
   const snapshot = (d: Droplets) => [d.x, d.y, d.vx, d.vy, d.life].map((a) => Array.from(a));
 
   it('are deterministic per seed, stay out of walls, and land once nothing feeds them', () => {
-    const { maze, field } = scene();
+    const { field, w, h, solid } = scene();
     expect(field.impactCount).toBeGreaterThan(0);
-    const a = createDroplets(field, 16, maze.seed);
-    const b = createDroplets(field, 16, maze.seed);
+    const a = createDroplets(field, 16, 42);
+    const b = createDroplets(field, 16, 42);
     const sources = { pourRate: 0.5, exitFlow: 0.4 };
     let below = 0;
     for (let k = 0; k < 300; k++) {
@@ -124,8 +147,8 @@ describe('droplets', () => {
       for (let i = 0; i < a.capacity; i++) {
         if (!a.life[i]) continue;
         const cy = Math.floor(a.y[i]);
-        if (cy >= maze.h) below++;
-        else expect(maze.solid[cy * maze.w + Math.floor(a.x[i])]).toBe(0);
+        if (cy >= h) below++;
+        else expect(solid[cy * w + Math.floor(a.x[i])]).toBe(0);
       }
     }
     expect(snapshot(a)).toEqual(snapshot(b));

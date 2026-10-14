@@ -106,7 +106,9 @@ export function prepareField(
     // Branch-free on walls, which are scattered too finely to predict.
     const open = 1 - solid[i];
     fill[i] = f * open;
-    kind[i] = open * (f >= ISO ? WATER : AIR);
+    // Classify on the stored (float32) value: a fill just under ISO can round
+    // up to it, and water and air holding equal fills would divide by zero.
+    kind[i] = open * (fill[i] >= ISO ? WATER : AIR);
   }
   if (exitFlow > 0 && h > 1) {
     for (let k = 0; k < exits.length; k++) {

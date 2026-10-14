@@ -93,6 +93,8 @@ function syncPourButton(): void {
 
 function render(): void {
   renderer.draw(sim);
+  drawnMaxMass = params.maxMass;
+  drawnMinMass = params.minMass;
   const s = getStats(sim);
   const state = s.solved
     ? `Solved in ${s.solvedAt} steps`
@@ -119,6 +121,9 @@ const LAG_FRAMES = 60;
 const SETTLED_DELTA = 1e-6;
 const SETTLE_CHECK_TICKS = 30;
 
+/** Mass scale the canvas was last drawn with. */
+let drawnMaxMass = NaN;
+let drawnMinMass = NaN;
 let smoothedFrameMs = 0;
 let slowFrames = 0;
 let tickCount = 0;
@@ -156,7 +161,7 @@ function frame(now: number): void {
   const elapsed = lastFrameAt < 0 ? 0 : now - lastFrameAt;
   lastFrameAt = now;
   const t0 = performance.now();
-  let stepped = false;
+  let ticksRun = 0;
   if (running) {
     owedMs += elapsed;
     let ticks = Math.min(MAX_CATCH_UP_TICKS, Math.floor(owedMs / TICK_MS));
@@ -164,7 +169,7 @@ function frame(now: number): void {
     if (owedMs >= TICK_MS) owedMs = TICK_MS / 2;
     for (; ticks > 0 && running; ticks--) {
       stepSim(sim, params.stepsPerFrame);
-      stepped = true;
+      ticksRun++;
       // Nothing left to move: stop stepping until Pour is pressed again.
       if (
         !sim.pouring &&
@@ -178,9 +183,14 @@ function frame(now: number): void {
   } else {
     owedMs = TICK_MS / 2;
   }
-  if (stepped) {
+  const t1 = performance.now();
+  if (ticksRun > 0) {
     render();
-    guardFrameBudget(performance.now() - t0);
+    // Budget one tick's work: a catch-up frame runs two ticks and must not read as lag.
+    guardFrameBudget((t1 - t0) / ticksRun + (performance.now() - t1));
+  } else if (params.maxMass !== drawnMaxMass || params.minMass !== drawnMinMass) {
+    // A slider changed how mass maps to fill while the sim is still.
+    render();
   }
   requestAnimationFrame(frame);
 }

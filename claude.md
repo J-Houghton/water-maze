@@ -45,6 +45,8 @@ src/
     stats.ts        mass, wet cells, water-at-exit, solved?
   render/
     draw.ts         Sim state + Maze -> ImageData -> canvas
+    field.ts        fill, depth and thin-water fields at sim resolution. DOM-free.
+    droplets.ts     zero-mass spray particles, own seeded RNG, stepped with the sim
   ui/
     panel.ts        lil-gui bindings
     main.ts         wiring, rAF loop, Pour button, URL params
@@ -228,6 +230,25 @@ Stop and report after milestone 3 and after milestone 6.
 - Full cells boxed in below and beside by full or solid cells are skipped by
   the CA when `maxCompress` is 0 (no flow is possible), which keeps a flooded
   40x40 maze within budget.
+- Smooth renderer instead of one block per sim cell (owner: "very
+  pixelated"). Still one ImageData and one putImageData, but at a fixed 800 px
+  on the maze's long side (not times devicePixelRatio): the fill field is
+  ghost-filled into walls, sampled bilinearly and cut at 0.5 with ~1 px
+  antialiasing; thin streams and floor films are drawn as sub-cell bands so
+  they don't vanish; colour follows distance below the surface (not mass),
+  with a highlight band just inside it. Zero-mass droplets (own mulberry32
+  from the maze seed) spray at the entrance, where streams land, and below
+  the exit; they advance per sim step, so `__sim.step` frames are
+  reproducible. Rejected: per-pixel caustics in JS (12-20 ms), blur+threshold
+  at output size, ctx.filter/SVG filters (not in Safari), WebGL (overturns
+  the Canvas 2D decision). Colours, widths and droplet amounts are first
+  picks awaiting owner review.
+- `stepsPerFrame` means steps per 1/60 s tick, not per requestAnimationFrame,
+  so the sim runs at the same speed on a 60 Hz and a 180 Hz display (catch-up
+  capped at 2 ticks). The canvas redraws only when the sim stepped or the
+  mass scale changed; the settle check also waits for droplets to land.
+  Worst case measured (40x40 fully flooded, this laptop): 6.7 ms for 4 steps
+  plus 5.1 ms to draw.
 
 ## Open
 
