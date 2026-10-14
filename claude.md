@@ -82,12 +82,21 @@ for each cell with mass, in this order:
 2. Flow left and right: equalize with horizontal neighbours.
 3. Flow up: only the excess above `maxMass` (pressure), by `maxCompress`.
 
+Then a pressure pass (communicating vessels) on the result: for each
+4-connected body of full cells, move water from its highest free surface to
+its lowest open neighbours, lowest row first, growing through neighbours
+that fill, up to `pressureRate` per body per step; then level the row where
+the two meet. This is what makes U-tubes level and pressure act at once;
+with `maxCompress` 0 water is incompressible and step 3 is idle.
+
 Use two buffers (read from `mass`, write deltas into `next`) so order of
 iteration does not bias the flow. Standard parameters, all in `SimParams`:
 
-- `maxMass` 1.0, `maxCompress` 0.02, `minMass` 0.0001 (below this a cell is dry)
-- `minFlow` 0.01, `maxSpeed` 1.0 (cap on mass moved per neighbour per step)
-- `pourRate` mass added per step at the entrance while pouring
+- `maxMass` 1.0, `maxCompress` 0, `minMass` 0.0001 (below this a cell is dry)
+- `minFlow` 0, `maxSpeed` 1.0 (cap on mass moved per neighbour per step)
+- `pressureRate` 4, mass the pressure pass may move per body per step (0 = off)
+- `pourRate` mass added per step at the entrance while pouring, only into
+  free room in the entrance cells (a full entrance spills)
 - `stepsPerFrame` 1 to 8, for speed without changing physics
 
 Cells at the exit opening are a sink: any mass that reaches them is counted
@@ -201,9 +210,29 @@ Stop and report after milestone 3 and after milestone 6.
   vanishingly small amounts (1e-30 and less) spread down every open path and
   reach the exit long before any visible water, making `drained > 0` meaningless.
   Mass is still conserved.
+- Pressure pass added, `maxCompress` 0.02 -> 0 (after milestone 6, at the
+  owner's request). With compression, pressure only diffused through full
+  water: the maze stored 70-90% of the pour as compression (cells at 11-24x
+  maxMass, densest at the top), drained 0.2-4.5% of the pour after solving,
+  pools sloped up to the ceiling at the pour end, and a 20x20 maze took
+  ~287k steps. Researched options: speeding up the CA (constant factor only),
+  a per-body communicating-vessels pass (chosen), a MAC/VOF pressure solve
+  (correct but 3-8 ms/step at 40x40 and much more code), and FLIP/SPH
+  particles (too slow at 40x40 in plain JS; stays the possible later swap).
+  Now: no cell exceeds maxMass, outflow matches the pour after solving, pools
+  fill level, seed 42 10x10 solves at step 2457 (was 13846) and 20x20 at
+  ~19k. Pour is limited to free room so a full entrance spills rather than
+  overfilling. `npm run bench` measures all of this; regression tests cover it.
+  Known look: pressure can push a 1-cell-tall full tongue along a floor, or a
+  1-cell full column down a drop.
+- Full cells boxed in below and beside by full or solid cells are skipped by
+  the CA when `maxCompress` is 0 (no flow is possible), which keeps a flooded
+  40x40 maze within budget.
 
 ## Open
 
-- Pour rate and `maxCompress` defaults: whatever looks right after
-  milestone 6.
-- Whether "solved" should also stop the pour or let it keep draining.
+- Pour rate default: whatever looks right after milestone 6.
+
+Settled: "solved" keeps pouring (owner, after milestone 6), but the page backs
+off when frame work stays over budget: fewer steps per frame first, then it
+stops the pour.

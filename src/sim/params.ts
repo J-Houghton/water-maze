@@ -1,7 +1,10 @@
 export interface SimParams {
-  /** Mass of a full, uncompressed cell. */
+  /** Mass of a full cell. */
   maxMass: number;
-  /** Extra mass a cell can hold per cell of water above it (pressure). */
+  /**
+   * Extra mass a cell may hold per cell of water above it. 0 keeps water
+   * incompressible; pressure is handled by the pressure pass instead.
+   */
   maxCompress: number;
   /** Below this a cell counts as dry. Mass is never deleted, only ignored. */
   minMass: number;
@@ -9,6 +12,11 @@ export interface SimParams {
   minFlow: number;
   /** Cap on mass moved to one neighbour per step. */
   maxSpeed: number;
+  /**
+   * Mass the pressure pass may move per connected body of water per step:
+   * how fast a full body levels out (communicating vessels). 0 turns it off.
+   */
+  pressureRate: number;
   /** Mass added at the entrance per step while pouring. */
   pourRate: number;
   /** Sim steps per rendered frame. Speed only; does not change the physics. */
@@ -17,11 +25,12 @@ export interface SimParams {
 
 export const DEFAULT_PARAMS: Readonly<SimParams> = {
   maxMass: 1.0,
-  maxCompress: 0.02,
+  maxCompress: 0,
   minMass: 0.0001,
   // CLAUDE.md lists 0.01; 0 is needed for the settle invariant. See Decisions there.
   minFlow: 0,
   maxSpeed: 1.0,
+  pressureRate: 4,
   pourRate: 0.5,
   stepsPerFrame: 4,
 };
@@ -39,6 +48,7 @@ export const PARAM_RANGES: Readonly<Record<keyof SimParams, ParamRange>> = {
   minMass: { min: 0, max: 0.01, step: 0.00001 },
   minFlow: { min: 0, max: 0.1, step: 0.001 },
   maxSpeed: { min: 0.05, max: 4, step: 0.01 },
+  pressureRate: { min: 0, max: 16, step: 0.1 },
   pourRate: { min: 0, max: 4, step: 0.01 },
   stepsPerFrame: { min: 1, max: 8, step: 1 },
 };

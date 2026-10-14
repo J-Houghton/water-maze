@@ -82,10 +82,16 @@ function basin() {
   const spreads: number[] = [];
   for (const at of [300, 600, 900]) {
     stepSim(sim, at - sim.steps);
+    // Pooled height per column: full cells up from the floor plus the partial
+    // cell on top. Falling water above the surface does not count.
     const heights: number[] = [];
     for (let x = 1; x < W - 1; x++) {
       let hgt = 0;
-      for (let y = 4; y < 29; y++) hgt += Math.min(1, sim.mass[y * W + x] / sim.params.maxMass);
+      for (let y = 28; y >= 4; y--) {
+        const f = Math.min(1, sim.mass[y * W + x] / sim.params.maxMass);
+        hgt += f;
+        if (f < 0.99) break;
+      }
       heights.push(hgt);
     }
     spreads.push(Math.max(...heights) - Math.min(...heights));
