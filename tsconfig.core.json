@@ -1,0 +1,11 @@
+{
+  // Core (maze + sim + rng) has no DOM and no Node globals, so any use of
+  // document/window/performance there is a type error. Keeps it headless
+  // and movable to a Web Worker later.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": ["src/maze", "src/sim", "src/rng.ts"]
+}
