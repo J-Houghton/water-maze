@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fluid Maze</title>
+    <link rel="icon" href="data:," />
     <style>
       body {
         margin: 0;
@@ -15,6 +16,29 @@
         color: #ddd;
         font-family: system-ui, sans-serif;
       }
+      main {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+      }
+      #hud {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      #pour {
+        font: inherit;
+        padding: 6px 16px;
+        min-width: 9em;
+      }
+      #status {
+        font-variant-numeric: tabular-nums;
+      }
+      #status.solved {
+        color: #7ee08a;
+        font-weight: 600;
+      }
       #view {
         image-rendering: pixelated;
         width: min(90vmin, 800px);
@@ -23,7 +47,13 @@
     </style>
   </head>
   <body>
-    <canvas id="view"></canvas>
+    <main>
+      <div id="hud">
+        <button id="pour" type="button">Pour</button>
+        <span id="status"></span>
+      </div>
+      <canvas id="view"></canvas>
+    </main>
     <script type="module" src="/src/ui/main.ts"></script>
   </body>
 </html>
