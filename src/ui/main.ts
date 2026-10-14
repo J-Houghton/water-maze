@@ -2,7 +2,7 @@ import { generateMaze } from '../maze/generate';
 import type { Maze } from '../maze/types';
 import { createRenderer, type Renderer } from '../render/draw';
 import { DEFAULT_PARAMS, type SimParams } from '../sim/params';
-import { getStats, type SimStats } from '../sim/stats';
+import { getStats, maxDelta, type SimStats } from '../sim/stats';
 import { createSim, stepSim, type Sim } from '../sim/water';
 import { createPanel, type MazeControls } from './panel';
 
@@ -67,6 +67,7 @@ function reset(newSeed: number): void {
   sim.params = params;
   renderer = createRenderer(canvas, maze);
   running = false;
+  guardNote = '';
   syncPourButton();
   syncUrl();
   render();
@@ -93,14 +94,60 @@ function syncPourButton(): void {
 function render(): void {
   renderer.draw(sim);
   const s = getStats(sim);
-  const state = s.solved ? `Solved in ${s.solvedAt} steps` : sim.pouring ? 'Pouring' : running ? 'Flowing' : 'Ready';
-  status.textContent = `${state} · seed ${seed} · step ${s.steps} · drained ${s.drained.toFixed(2)}`;
+  const state = s.solved
+    ? `Solved in ${s.solvedAt} steps`
+    : sim.pouring
+      ? 'Pouring'
+      : running
+        ? 'Flowing'
+        : s.steps > 0
+          ? 'Settled'
+          : 'Ready';
+  const extra = guardNote ? ` · ${guardNote}` : '';
+  status.textContent = `${state} · seed ${seed} · step ${s.steps} · drained ${s.drained.toFixed(2)}${extra}`;
   status.classList.toggle('solved', s.solved);
 }
 
+/** Sim + draw time per frame above this, sustained for LAG_FRAMES, counts as lag. */
+const FRAME_BUDGET_MS = 12;
+const LAG_FRAMES = 60;
+/** With the pour off, still water whose cells change less than this stops being stepped. */
+const SETTLED_DELTA = 1e-6;
+const SETTLE_CHECK_FRAMES = 30;
+
+let smoothedFrameMs = 0;
+let slowFrames = 0;
+let frameCount = 0;
+let guardNote = '';
+
+/** Keep pouring after solving, but back off if the frame budget is blown: fewer steps first, then stop the pour. */
+function guardFrameBudget(ms: number): void {
+  smoothedFrameMs += (ms - smoothedFrameMs) * 0.1;
+  if (!running || smoothedFrameMs <= FRAME_BUDGET_MS) {
+    slowFrames = 0;
+    return;
+  }
+  if (++slowFrames < LAG_FRAMES) return;
+  slowFrames = 0;
+  if (params.stepsPerFrame > 1) {
+    params.stepsPerFrame -= 1;
+    panel.refresh();
+    guardNote = `slowed to ${params.stepsPerFrame} steps/frame`;
+  } else if (sim.pouring) {
+    setPouring(false);
+    guardNote = 'pour stopped to keep the frame rate up';
+  }
+}
+
 function frame(): void {
-  if (running) stepSim(sim, params.stepsPerFrame);
+  const t0 = performance.now();
+  if (running) {
+    stepSim(sim, params.stepsPerFrame);
+    // Nothing left to move: stop stepping until Pour is pressed again.
+    if (!sim.pouring && ++frameCount % SETTLE_CHECK_FRAMES === 0 && maxDelta(sim) < SETTLED_DELTA) running = false;
+  }
   render();
+  guardFrameBudget(performance.now() - t0);
   requestAnimationFrame(frame);
 }
 
