@@ -4,7 +4,7 @@ import { createRenderer, type Renderer } from '../render/draw';
 import { DEFAULT_PARAMS, type SimParams } from '../sim/params';
 import { getStats, type SimStats } from '../sim/stats';
 import { createSim, stepSim, type Sim } from '../sim/water';
-import { createPanel } from './panel';
+import { createPanel, type MazeControls } from './panel';
 
 /** Deterministic driver for scripted browser checks (Playwright). */
 interface SimDriver {
@@ -51,8 +51,17 @@ let renderer: Renderer;
 /** Set by the Pour button: the rAF loop advances the sim. Scripts using __sim leave it off. */
 let running = false;
 
+const mazeControls: MazeControls = {
+  seed,
+  reset: () => reset(mazeControls.seed),
+  regenerate: () => reset(seed + 1),
+};
+const panel = createPanel(params, mazeControls);
+
 function reset(newSeed: number): void {
-  seed = newSeed;
+  seed = Math.trunc(newSeed);
+  mazeControls.seed = seed;
+  panel.refresh();
   maze = generateMaze(seed, { cols, rows });
   sim = createSim(maze, params);
   sim.params = params;
@@ -97,8 +106,6 @@ function frame(): void {
 
 pourButton.addEventListener('click', () => setPouring(!sim.pouring));
 
-createPanel();
-
 window.__sim = {
   step(n, pour = true) {
     sim.pouring = pour;
@@ -110,6 +117,7 @@ window.__sim = {
   getStats: () => getStats(sim),
   setParams(p) {
     Object.assign(params, p);
+    panel.refresh();
   },
   reset(s = seed) {
     reset(s);
